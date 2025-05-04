@@ -9,8 +9,6 @@ if ! command -v docker >/dev/null 2>&1; then
     exit
 fi
 
-exit
-
 # https://docs.openwebui.com/getting-started/env-configuration/
 . .env
 docker run -d -p 80:8080 \
