@@ -1,6 +1,17 @@
 #!/bin/bash
-# https://docs.openwebui.com/getting-started/env-configuration/
 
+if ! command -v ghidra >/dev/null 2>&1; then
+    echo "ghidra not installed!"
+    exit
+fi
+if ! command -v docker >/dev/null 2>&1; then
+    echo "docker not installed!"
+    exit
+fi
+
+exit
+
+# https://docs.openwebui.com/getting-started/env-configuration/
 . .env
 docker run -d -p 80:8080 \
 -e ENABLE_OPENAI_API=True \
@@ -14,3 +25,5 @@ docker run -d -p 80:8080 \
 --name open-webui \
 --restart always \
 ghcr.io/open-webui/open-webui:main # the actual container name
+
+echo "open-webui should be running at http://localhost"
