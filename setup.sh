@@ -1,13 +1,22 @@
 #!/bin/bash
 
-if ! command -v ghidra >/dev/null 2>&1; then
-    echo "ghidra not installed!"
-    exit
-fi
-if ! command -v docker >/dev/null 2>&1; then
-    echo "docker not installed!"
-    exit
-fi
+check_installed() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        echo "$1 not installed!"
+        echo "Exiting"
+        exit
+    fi
+}
+check_installed docker
+check_installed ghidra
+check_installed uv
+
+uv venv
+uv pip install -r ghidramcp.requirements.txt
+#uv run bridge_mcp_ghidra.py &
+uvx mcpo --host localhost --port 3333 -- uv run bridge_mcp_ghidra.py
+
+exit
 
 # https://docs.openwebui.com/getting-started/env-configuration/
 . .env
