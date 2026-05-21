@@ -5,41 +5,74 @@ https://github.com/wellingtonlee/ghidra-docker-mcp
 https://github.com/mcpjungle/MCPJungle
 Uses dockerfiles and docker compose
 
-## Original README
-Quick-install setup for running an llm from an endpoint to use with webui and ghidra-mcp
+fma-llm brings AI-assisted binary analysis to your desktop. Chat with an LLM that can decompile functions, search strings, find cross-references, and more by calling MCP tools that run inside a headless Ghidra container.
 
-Based on [this medium piece](https://medium.com/@clearbluejar/supercharging-ghidra-using-local-llms-with-ghidramcp-via-ollama-and-openweb-ui-794cef02ecf7)
+## Architecture
 
-## Setup:
-0. Make sure `docker`, [`ghidra`](https://github.com/NationalSecurityAgency/ghidra?tab=readme-ov-file#install) and [`uv`](https://docs.astral.sh/uv/) are installed 
-1. Add the [GhidraMCP](https://github.com/LaurieWired/GhidraMCP/releases) plugin to Ghidra
-    1. Extract the `GhidraMCP-x-y.zip` from the larger .zip
-    2. Open Ghidra and go to `File->Install Extensions->➕`
-    3. Add the `GhidraMCP-x-y.zip` plugin and restart Ghidra
-    4. Open Ghidra's codebrowser window (press the dragon)
-        - Ignore the "configure plugin" window that pops up automatically
-    5. In codebrowser, go to `File->Configure->Deceloper->Configure`
-    6. Make sure the `GhidraMCPPlugin` plugin is checked enabled
-2. Download required GhidraMCP files
-```bash
-wget -O ghidramcp.requirements.txt https://raw.githubusercontent.com/LaurieWired/GhidraMCP/refs/heads/main/requirements.txt
-wget -O bridge_mcp_ghidra.py https://raw.githubusercontent.com/LaurieWired/GhidraMCP/refs/heads/main/bridge_mcp_ghidra.py
 ```
-3. Run `setup.sh`
-4. Open webui at `http://localhost
-    1. Click through "welcome to webui" (if prompted); you should _not_ need a user account
-    2. Click the "profile" circle at the top right of the page
-    3. Navigate to `Settings>Tools>Manage Tool Servers>➕`
-    4. Type `http://localhost:3333` in the (darkenned) `API Base URL` text box
-    5. `Save` both the tool setting and your overall Settings
-5. Select a model to use with your chat
-    1. At the top right of the center element of the page, select the `v` ![the red circle](model_selection.png)
-    2. Select a model that can make toolcalls (ex `Meta Llama 3.3 70B`)
-6. Make sure files are added to your project in ghidra
-
-## Test Chat:
-```bash
-uv venv
-uv pip install -r chat.requirements.txt
-uv run chat.py
+LLM Endpoint ──▶ Open WebUI ──MCP Streamable HTTP──▶ MCPJungle ──▶ ghidra-docker-mcp
+                                                               ──▶ future MCP servers
 ```
+
+## Prerequisites
+
+- Docker and Docker Compose v2+
+- An OpenAI-compatible LLM API key
+- Optional: Ghidra desktop for GUI work (not required for MCP tool access)
+
+## Quick Start
+
+1. Clone the repo.
+2. Copy `example.env` to `.env` and fill in your `BASE_URL` and `API_KEY`.
+3. Run `docker compose up -d`. The first build of ghidra-mcp can take several minutes.
+4. Run `./scripts/setup-mcpjungle.sh` to verify registration and create the default tool group.
+5. Open http://localhost in your browser.
+6. In Open WebUI, go to Admin Panel → Settings → External Tools → Add Connection:
+   - Type: MCP Streamable HTTP
+   - URL: `http://mcpjungle:8080/mcp`
+   - Auth: None
+7. Pick a tool-capable model in the chat UI.
+8. Import a binary into the `./binaries` volume and start asking questions.
+
+## Usage Examples
+
+- "List all functions in the binary"
+- "Decompile the main function"
+- "Search for strings containing 'password'"
+- "Show cross-references to this address"
+
+## Adding Future MCP Servers
+
+Add a new service to `docker-compose.yml`, expose its SSE endpoint, then run:
+
+```bash
+./scripts/setup-mcpjungle.sh register --name <name> --url <internal-url>
+```
+
+## Tool Curation with MCPJungle Groups
+
+MCPJungle exposes every tool by default. Use Tool Groups to curate a focused set for your chats.
+
+```bash
+./scripts/setup-mcpjungle.sh group-add <tool-name>
+./scripts/setup-mcpjungle.sh group-remove <tool-name>
+```
+
+ghidra-docker-mcp ships with 32 tools. See the full list in its [README](https://github.com/wellingtonlee/ghidra-docker-mcp).
+
+## Configuration Reference
+
+| Variable            | Purpose                              | Default / Example          |
+|---------------------|--------------------------------------|----------------------------|
+| BASE_URL            | OpenAI-compatible LLM endpoint       | https://api.openai.com/v1  |
+| API_KEY             | Your LLM provider key                | sk-...                     |
+| WEBUI_SECRET_KEY    | Stable secret for Open WebUI sessions| (generate with openssl)    |
+| OWUI_PORT           | Open WebUI host port                 | 80                         |
+| MCPJUNGLE_PORT      | MCPJungle host port                  | 8080                       |
+| GHIDRA_MCP_PORT     | ghidra-mcp host port                 | 3333                       |
+
+## Troubleshooting
+
+- Check logs: `docker compose logs <service>`
+- Rebuild ghidra-mcp: `docker compose build ghidra-mcp`
+- Reset everything: `docker compose down -v && docker compose up -d`
