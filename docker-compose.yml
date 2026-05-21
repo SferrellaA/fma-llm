@@ -41,7 +41,8 @@ services:
   # ghidra-mcp - Headless Ghidra with MCP tools for binary analysis (SSE transport)
   ghidra-mcp:
     build:
-      context: https://github.com/wellingtonlee/ghidra-docker-mcp.git
+      # pinned to commit 31269275 (2026-05-21) for reproducibility
+      context: https://github.com/wellingtonlee/ghidra-docker-mcp.git#312692758921cae2ca77c8c59ead2dae578f8f10
       dockerfile: Dockerfile
     ports:
       - "3333:8080"
