@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Open WebUI - Chat interface that connects to MCPJungle for tool access
   open-webui:
