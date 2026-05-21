@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  # Open WebUI - Chat interface that connects to MCPJungle for tool access
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    ports:
+      - "80:8080"
+    environment:
+      - OPENAI_API_BASE_URL=${BASE_URL}
+      - OPENAI_API_KEY=${API_KEY}
+      - WEBUI_AUTH=False
+      - ENABLE_OLLAMA_API=False
+      - ENABLE_OPENAI_API=True
+      - BYPASS_MODEL_ACCESS_CONTROL=True
+      - ENABLE_DIRECT_CONNECTIONS=True
+    volumes:
+      - open-webui-data:/app/backend/data
+    restart: unless-stopped
+    depends_on:
+      mcp-setup:
+        condition: service_completed_successfully
+
+  # MCPJungle - MCP gateway that aggregates and exposes MCP servers via Streamable HTTP
+  mcpjungle:
+    image: ghcr.io/mcpjungle/mcpjungle:latest-stdio
+    ports:
+      - "8080:8080"
+    volumes:
+      - mcpjungle-data:/data
+    environment:
+      - SQLITE_DB_PATH=/data/mcpjungle.db
+    healthcheck:
+      test: ["CMD", "/mcpjungle", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  # ghidra-mcp - Headless Ghidra with MCP tools for binary analysis (SSE transport)
+  ghidra-mcp:
+    build:
+      context: https://github.com/wellingtonlee/ghidra-docker-mcp.git
+      dockerfile: Dockerfile
+    ports:
+      - "3333:8080"
+    volumes:
+      - ./binaries:/home/ghidra/binaries:ro
+      - ghidra-projects:/home/ghidra/projects
+    environment:
+      - GHIDRA_ANALYSIS_TIMEOUT_SECONDS=300
+      - GHIDRA_MAX_HEAP=2g
+    command: ["--transport", "sse"]
+    restart: unless-stopped
+
+  # mcp-setup - One-shot initialization container that registers ghidra-mcp with MCPJungle
+  mcp-setup:
+    image: ghcr.io/mcpjungle/mcpjungle:latest-stdio
+    depends_on:
+      mcpjungle:
+        condition: service_healthy
+      ghidra-mcp:
+        condition: service_started
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Waiting for ghidra-mcp SSE endpoint..."
+        i=0
+        until wget --spider -q http://ghidra-mcp:8080; do
+          i=$$((i+1))
+          if [ $$i -ge 60 ]; then
+            echo "Timeout waiting for ghidra-mcp after 60 retries"
+            exit 1
+          fi
+          sleep 1
+        done
+        echo "Registering ghidra-mcp with MCPJungle..."
+        /mcpjungle register --name ghidra --description "Ghidra binary analysis MCP server" --url http://ghidra-mcp:8080
+        echo "Creating Tool Group 're-tools'..."
+        /mcpjungle group create --name re-tools --description "Reverse engineering tools (curated subset)"
+        echo "Setup complete."
+    restart: "no"
+
+volumes:
+  open-webui-data:
+  mcpjungle-data:
+  ghidra-projects:
