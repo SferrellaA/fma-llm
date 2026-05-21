@@ -64,6 +64,7 @@ wait_for_health() {
 # -----------------------------------------------------------------------------
 is_ghidra_registered() {
     # List servers and grep for our name. Output is JSON-ish; we just need presence.
+    # Match the JSON key-value pattern precisely to avoid false positives.
     if docker compose exec -T "$MCPJUNGLE_SERVICE" /mcpjungle list 2>/dev/null | grep -q "\"name\": \"${GHIDRA_NAME}\""; then
         return 0
     fi
@@ -97,14 +98,17 @@ cmd_register() {
 cmd_create_group() {
     check_docker
 
-    # Try to create; if it already exists, MCPJungle will error — we treat that as success.
-    if docker compose exec -T "$MCPJUNGLE_SERVICE" /mcpjungle group create \
+    # Try to create; if it already exists, MCPJungle errors with "group already exists".
+    # We treat that non-fatal case as success. Other errors still propagate.
+    local output
+    output=$(docker compose exec -T "$MCPJUNGLE_SERVICE" /mcpjungle group create \
         --name "$GROUP_NAME" \
-        --description "Reverse engineering tools (curated subset)" 2>&1; then
-        echo "Tool Group '${GROUP_NAME}' created (or already existed)."
-    else
-        # The error path is expected when group exists; we still consider it success.
+        --description "Reverse engineering tools (curated subset)" 2>&1) || true
+    if echo "$output" | grep -qi "already exists"; then
         echo "Tool Group '${GROUP_NAME}' already exists."
+    elif [ -n "$output" ]; then
+        echo "$output"
+        echo "Tool Group '${GROUP_NAME}' ready."
     fi
 }
 
