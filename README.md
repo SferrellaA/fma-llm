@@ -1,5 +1,11 @@
 # fma-llm
 
+## Re-Write TODO
+https://github.com/wellingtonlee/ghidra-docker-mcp
+https://github.com/mcpjungle/MCPJungle
+Uses dockerfiles and docker compose
+
+## Original README
 Quick-install setup for running an llm from an endpoint to use with webui and ghidra-mcp
 
 Based on [this medium piece](https://medium.com/@clearbluejar/supercharging-ghidra-using-local-llms-with-ghidramcp-via-ollama-and-openweb-ui-794cef02ecf7)

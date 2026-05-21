@@ -1,9 +1,31 @@
+# secrets
 .env
+
+# python
 .python-version
 pyproject.toml
 .venv
 uv.lock
+**/__pycache__/
+
+# ghidra legacy
 ghidra
 bridge_mcp_ghidra.py
 GhidraMCP*.zip
 ghidramcp.requirements.txt
+
+# ghidra-docker-mcp runtime
+ghidra-projects/
+
+# mcpjungle runtime
+mcpjungle.db
+
+# docker
+volumes/
+data/
+
+# logs
+*.log
+
+# os
+.DS_Store
