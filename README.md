@@ -28,12 +28,9 @@ MCPJungle is currently disabled (commented out in docker-compose.yml). Open WebU
 2. Copy `example.env` to `.env` and fill in your `BASE_URL` and `API_KEY`.
 3. Run `docker compose up -d`. The first build of ghidra-mcp-headless can take several minutes.
 4. Open http://localhost in your browser.
-5. In Open WebUI, go to Admin Panel → Settings → External Tools → Add Connection:
-   - Type: MCP Streamable HTTP
-   - URL: `http://ghidra-mcp-bridge:8090/mcp`
-   - Auth: None
-6. Pick a tool-capable model in the chat UI.
-7. Place a binary file in `./binaries/` and use the `import_file` MCP tool with path `/binaries/your-binary` to load it into Ghidra for analysis.
+5. Pick the default model (`grok-4.3`) or a tool-capable model of your choice. All MCP tools are
+   **auto-bound to the model** at startup — no manual configuration needed.
+6. Place a binary file in `./binaries/` and use the `import_file` MCP tool with path `/binaries/your-binary` to load it into Ghidra for analysis.
 
 ## Usage Examples
 
@@ -61,17 +58,35 @@ When MCPJungle is enabled, it exposes every tool by default. Use Tool Groups to 
 
 ghidra-mcp ships with 249 tools. See the full list in its [README](https://github.com/bethington/ghidra-mcp).
 
+## Auto-Config: MCP Tools Bound at Startup
+
+Open WebUI auto-discovers and binds all MCP tools to the default model on every container
+start. Here's how it works:
+
+1. `TOOL_SERVER_CONNECTIONS` registers MCP servers with Open WebUI at the application level.
+2. On startup, the container runs a bootstrap script that signs in via the admin API
+   (`WEBUI_ADMIN_EMAIL`/`WEBUI_ADMIN_PASSWORD`), discovers all registered `server:mcp:*`
+   tool IDs, and creates/updates a workspace model with every tool ID attached.
+3. The model's `meta.toolIds` array is populated automatically — every new chat has full
+   tool access without manual per-chat tool selection.
+
+**Future-proof**: Adding a new MCP server to `TOOL_SERVER_CONNECTIONS` is automatically
+picked up on the next restart. No script changes needed.
+
 ## Configuration Reference
 
-| Variable                  | Purpose                              | Default / Example          |
-|---------------------------|--------------------------------------|----------------------------|
-| BASE_URL                  | OpenAI-compatible LLM endpoint       | https://api.openai.com/v1  |
-| API_KEY                   | Your LLM provider key                | sk-...                     |
-| WEBUI_SECRET_KEY          | Stable secret for Open WebUI sessions| (generate with openssl)    |
-| GHIDRA_MCP_AUTH_TOKEN     | Auth token for headless Ghidra MCP   | changeme                   |
-| OWUI_PORT                 | Open WebUI host port                 | 80                         |
-| GHIDRA_MCP_HEADLESS_PORT  | Ghidra headless REST API host port   | 3334                       |
-| GHIDRA_MCP_BRIDGE_PORT    | Ghidra MCP bridge (Streamable HTTP)  | 3335                       |
+| Variable                  | Purpose                              | Default / Example                        |
+|---------------------------|--------------------------------------|------------------------------------------|
+| BASE_URL                  | OpenAI-compatible LLM endpoint       | https://api.openai.com/v1                |
+| API_KEY                   | Your LLM provider key                | sk-...                                   |
+| WEBUI_ADMIN_EMAIL         | Admin email for bootstrap auth       | admin@fma-llm.local                      |
+| WEBUI_ADMIN_PASSWORD      | Admin password for bootstrap auth    | changeme-admin-pw                        |
+| DEFAULT_MODEL_PARAMS      | Default model params (native tool)   | {"function_calling":"native"}            |
+| WEBUI_SECRET_KEY          | Stable secret for Open WebUI sessions| (generate with openssl)                  |
+| GHIDRA_MCP_AUTH_TOKEN     | Auth token for headless Ghidra MCP   | changeme                                 |
+| OWUI_PORT                 | Open WebUI host port                 | 80                                       |
+| GHIDRA_MCP_HEADLESS_PORT  | Ghidra headless REST API host port   | 3334                                     |
+| GHIDRA_MCP_BRIDGE_PORT    | Ghidra MCP bridge (Streamable HTTP)  | 3335                                     |
 
 ## Troubleshooting
 
