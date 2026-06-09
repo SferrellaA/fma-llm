@@ -1,5 +1,5 @@
 services:
-  # Open WebUI - Chat interface that connects to MCPJungle for tool access
+  # Open WebUI - Chat interface that connects directly to the ghidra-mcp bridge
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
     ports:
@@ -12,76 +12,118 @@ services:
       - ENABLE_OPENAI_API=True
       - BYPASS_MODEL_ACCESS_CONTROL=True
       - ENABLE_DIRECT_CONNECTIONS=True
+      - TOOL_SERVER_CONNECTIONS=[{"type":"mcp","url":"http://ghidra-mcp-headless:8090/mcp","spec_type":"url","spec":"","path":"openapi.json","auth_type":"none","key":"","config":{"enable":true},"info":{"id":"ghidra","name":"ghidra-mcp","description":"Ghidra binary analysis MCP server (249 tools)"}}]
     volumes:
       - open-webui-data:/app/backend/data
     restart: unless-stopped
-    depends_on:
-      mcp-setup:
-        condition: service_completed_successfully
 
   # MCPJungle - MCP gateway that aggregates and exposes MCP servers via Streamable HTTP
-  mcpjungle:
-    image: ghcr.io/mcpjungle/mcpjungle:latest-stdio
-    ports:
-      - "8080:8080"
-    volumes:
-      - mcpjungle-data:/data
-    environment:
-      - SQLITE_DB_PATH=/data/mcpjungle.db
-    healthcheck:
-      test: ["CMD", "/mcpjungle", "health"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 10s
-    restart: unless-stopped
+  # Temporarily disabled. Uncomment when ready to integrate.
+  # mcpjungle:
+  #   image: ghcr.io/mcpjungle/mcpjungle:latest-stdio
+  #   ports:
+  #     - "8080:8080"
+  #   volumes:
+  #     - mcpjungle-data:/data
+  #   environment:
+  #     - SQLITE_DB_PATH=/data/mcpjungle.db
+  #   healthcheck:
+  #     test: ["CMD", "/mcpjungle", "health"]
+  #     interval: 5s
+  #     timeout: 3s
+  #     retries: 10
+  #     start_period: 10s
+  #   restart: unless-stopped
 
-  # ghidra-mcp - Headless Ghidra with MCP tools for binary analysis (SSE transport)
-  ghidra-mcp:
+  # ghidra-mcp-headless - Ghidra 12.1 headless REST API server (bethington/ghidra-mcp)
+  # Exposes 195+ REST endpoints for binary analysis. The MCP bridge translates these
+  # to MCP tools for AI consumption.
+  ghidra-mcp-headless:
     build:
-      # pinned to commit 31269275 (2026-05-21) for reproducibility
-      context: https://github.com/wellingtonlee/ghidra-docker-mcp.git#312692758921cae2ca77c8c59ead2dae578f8f10
-      dockerfile: Dockerfile
+      # pinned to tag v5.13.1 (2026-06-08) for reproducibility
+      context: https://github.com/bethington/ghidra-mcp.git#v5.13.1
+      dockerfile: docker/Dockerfile
     ports:
-      - "3333:8080"
+      - "${GHIDRA_MCP_HEADLESS_PORT:-3334}:8089"   # REST API (direct access for debugging)
+      - "${GHIDRA_MCP_BRIDGE_PORT:-3335}:8090"      # MCP Streamable HTTP endpoint (via bridge)
     volumes:
-      - ./binaries:/home/ghidra/binaries:ro
-      - ghidra-projects:/home/ghidra/projects
+      - ./binaries:/binaries:ro
+      - ghidra-projects:/projects
     environment:
-      - GHIDRA_ANALYSIS_TIMEOUT_SECONDS=300
-      - GHIDRA_MAX_HEAP=2g
-    command: ["--transport", "sse"]
+      - GHIDRA_MCP_PORT=8089
+      - GHIDRA_MCP_AUTH_TOKEN=${GHIDRA_MCP_AUTH_TOKEN:-changeme}
+      - JAVA_OPTS=-Xmx4g -XX:+UseG1GC
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8089/check_connection"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 5
+
+  # ghidra-mcp-bridge - MCP↔HTTP bridge that translates MCP protocol calls to the
+  # Ghidra headless REST API. Runs in the headless container's network namespace so
+  # it can reach the REST API at localhost:8089.
+  # Exposes 249 MCP tools via Streamable HTTP transport.
+  ghidra-mcp-bridge:
+    image: python:3.12-slim
+    network_mode: "service:ghidra-mcp-headless"
+    depends_on:
+      ghidra-mcp-headless:
+        condition: service_healthy
+    environment:
+      - GHIDRA_MCP_AUTH_TOKEN=${GHIDRA_MCP_AUTH_TOKEN:-changeme}
+    command:
+      - sh
+      - -c
+      - |
+        pip install -q --no-cache-dir 'mcp>=1.2.0,<2' &&
+        python -c "import urllib.request; urllib.request.urlretrieve('https://raw.githubusercontent.com/bethington/ghidra-mcp/v5.13.1/bridge_mcp_ghidra.py', '/bridge.py')" &&
+        python -c "
+        import re
+        with open('/bridge.py') as f:
+            code = f.read()
+        code = code.replace(
+            '    headers = {}',
+            '    headers = {}\n    auth_token = os.environ.get(\"GHIDRA_MCP_AUTH_TOKEN\")\n    if auth_token:\n        headers[\"Authorization\"] = f\"Bearer {auth_token}\"'
+        )
+        with open('/bridge.py', 'w') as f:
+            f.write(code)
+        " &&
+        python /bridge.py --transport streamable-http --mcp-host 0.0.0.0 --mcp-port 8090
     restart: unless-stopped
 
   # mcp-setup - One-shot initialization container that registers ghidra-mcp with MCPJungle
-  mcp-setup:
-    image: ghcr.io/mcpjungle/mcpjungle:latest-stdio
-    depends_on:
-      mcpjungle:
-        condition: service_healthy
-      ghidra-mcp:
-        condition: service_started
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        echo "Waiting for ghidra-mcp SSE endpoint..."
-        i=0
-        until wget --spider -q http://ghidra-mcp:8080; do
-          i=$$((i+1))
-          if [ $$i -ge 60 ]; then
-            echo "Timeout waiting for ghidra-mcp after 60 retries"
-            exit 1
-          fi
-          sleep 1
-        done
-        echo "Registering ghidra-mcp with MCPJungle..."
-        /mcpjungle register --name ghidra --description "Ghidra binary analysis MCP server" --url http://ghidra-mcp:8080
-        echo "Creating Tool Group 're-tools'..."
-        /mcpjungle group create --name re-tools --description "Reverse engineering tools (curated subset)"
-        echo "Setup complete."
-    restart: "no"
+  # Temporarily disabled with MCPJungle. Uncomment when ready to integrate.
+  # mcp-setup:
+  #   image: ghcr.io/mcpjungle/mcpjungle:latest-stdio
+  #   depends_on:
+  #     mcpjungle:
+  #       condition: service_healthy
+  #     ghidra-mcp-headless:
+  #       condition: service_started
+  #     ghidra-mcp-bridge:
+  #       condition: service_started
+  #   entrypoint: ["/bin/sh", "-c"]
+  #   command:
+  #     - |
+  #       echo "Waiting for ghidra-mcp bridge endpoint..."
+  #       i=0
+  #       until curl -s http://ghidra-mcp-headless:8090/mcp > /dev/null 2>&1; do
+  #         i=$$((i+1))
+  #         if [ $$i -ge 120 ]; then
+  #           echo "Timeout waiting for ghidra-mcp bridge after 120 retries"
+  #           exit 1
+  #         fi
+  #         sleep 2
+  #       done
+  #       echo "Registering ghidra-mcp with MCPJungle..."
+  #       /mcpjungle register --name ghidra --description "Ghidra binary analysis MCP server (249 tools)" --url http://ghidra-mcp-headless:8090/mcp
+  #       echo "Creating Tool Group 're-tools'..."
+  #       /mcpjungle group create --name re-tools --description "Reverse engineering tools (curated subset)"
+  #       echo "Setup complete."
+  #   restart: "no"
 
 volumes:
   open-webui-data:
-  mcpjungle-data:
   ghidra-projects:
