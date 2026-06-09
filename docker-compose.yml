@@ -1,5 +1,5 @@
 services:
-  # Open WebUI - Chat interface that connects directly to the ghidra-mcp bridge
+  # Open WebUI - Chat interface that connects to the combined Ghidra+MCP container
   # On first start, auto-creates an admin user (WEBUI_ADMIN_EMAIL/PASSWORD),
   # then auto-discovers all MCP tool servers and binds them to the default model
   # so every new chat has tools available without manual setup.
@@ -22,6 +22,9 @@ services:
       - WEBUI_ADMIN_EMAIL=${WEBUI_ADMIN_EMAIL:-admin@fma-llm.local}
       - WEBUI_ADMIN_PASSWORD=${WEBUI_ADMIN_PASSWORD:-changeme-admin-pw}
       - TOOL_SERVER_CONNECTIONS=[{"type":"mcp","url":"http://ghidra-mcp-headless:8090/mcp","spec_type":"url","spec":"","path":"openapi.json","auth_type":"none","key":"","config":{"enable":true},"info":{"id":"ghidra","name":"ghidra-mcp","description":"Ghidra binary analysis MCP server (249 tools)"}}]
+    depends_on:
+      ghidra-mcp-headless:
+        condition: service_started
     volumes:
       - open-webui-data:/app/backend/data
     restart: unless-stopped
@@ -45,6 +48,18 @@ services:
         for i in $$(seq 1 120); do
           if curl -sf http://localhost:$${PORT:-8080}/health > /dev/null 2>&1; then
             echo "Server healthy after $${i}s"
+            break
+          fi
+          sleep 2
+        done
+
+        # Wait for the MCP bridge on the Ghidra container to be ready
+        MCP_URL=http://ghidra-mcp-headless:8090/mcp
+        echo "Waiting for MCP bridge at $${MCP_URL}..."
+        for i in $$(seq 1 60); do
+          if curl -sf "$${MCP_URL}" -X POST -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' > /dev/null 2>&1; then
+            echo "MCP bridge ready after $${i}s"
             break
           fi
           sleep 2
@@ -176,17 +191,18 @@ services:
   #     start_period: 10s
   #   restart: unless-stopped
 
-  # ghidra-mcp-headless - Ghidra 12.1 headless REST API server (bethington/ghidra-mcp)
-  # Exposes 195+ REST endpoints for binary analysis. The MCP bridge translates these
-  # to MCP tools for AI consumption.
+  # ghidra-mcp-headless - Combined Ghidra 12.1 headless REST API + Python MCP bridge
+  # Merges the upstream GhidraMCP headless server (bethington/ghidra-mcp v5.13.1)
+  # and its bridge_mcp_ghidra.py into a single container. The Java process serves
+  # 195+ REST endpoints for binary analysis on port 8089; the Python process
+  # translates them to 249 MCP tools on port 8090.
   ghidra-mcp-headless:
     build:
-      # pinned to tag v5.13.1 (2026-06-08) for reproducibility
-      context: https://github.com/bethington/ghidra-mcp.git#v5.13.1
+      context: .
       dockerfile: docker/Dockerfile
     ports:
       - "${GHIDRA_MCP_HEADLESS_PORT:-3334}:8089"   # REST API (direct access for debugging)
-      - "${GHIDRA_MCP_BRIDGE_PORT:-3335}:8090"      # MCP Streamable HTTP endpoint (via bridge)
+      - "${GHIDRA_MCP_BRIDGE_PORT:-3335}:8090"      # MCP Streamable HTTP endpoint
     volumes:
       - ./binaries:/binaries:ro
       - ghidra-projects:/projects
@@ -202,38 +218,6 @@ services:
       start_period: 120s
       retries: 5
 
-  # ghidra-mcp-bridge - MCP↔HTTP bridge that translates MCP protocol calls to the
-  # Ghidra headless REST API. Runs in the headless container's network namespace so
-  # it can reach the REST API at localhost:8089.
-  # Exposes 249 MCP tools via Streamable HTTP transport.
-  ghidra-mcp-bridge:
-    image: python:3.12-slim
-    network_mode: "service:ghidra-mcp-headless"
-    depends_on:
-      ghidra-mcp-headless:
-        condition: service_healthy
-    environment:
-      - GHIDRA_MCP_AUTH_TOKEN=${GHIDRA_MCP_AUTH_TOKEN:-changeme}
-    command:
-      - sh
-      - -c
-      - |
-        pip install -q --no-cache-dir 'mcp>=1.2.0,<2' &&
-        python -c "import urllib.request; urllib.request.urlretrieve('https://raw.githubusercontent.com/bethington/ghidra-mcp/v5.13.1/bridge_mcp_ghidra.py', '/bridge.py')" &&
-        python -c "
-        import re
-        with open('/bridge.py') as f:
-            code = f.read()
-        code = code.replace(
-            '    headers = {}',
-            '    headers = {}\n    auth_token = os.environ.get(\"GHIDRA_MCP_AUTH_TOKEN\")\n    if auth_token:\n        headers[\"Authorization\"] = f\"Bearer {auth_token}\"'
-        )
-        with open('/bridge.py', 'w') as f:
-            f.write(code)
-        " &&
-        python /bridge.py --transport streamable-http --mcp-host 0.0.0.0 --mcp-port 8090
-    restart: unless-stopped
-
   # mcp-setup - One-shot initialization container that registers ghidra-mcp with MCPJungle
   # Temporarily disabled with MCPJungle. Uncomment when ready to integrate.
   # mcp-setup:
@@ -242,8 +226,6 @@ services:
   #     mcpjungle:
   #       condition: service_healthy
   #     ghidra-mcp-headless:
-  #       condition: service_started
-  #     ghidra-mcp-bridge:
   #       condition: service_started
   #   entrypoint: ["/bin/sh", "-c"]
   #   command:

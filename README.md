@@ -10,11 +10,19 @@ fma-llm brings AI-assisted binary analysis to your desktop. Chat with an LLM tha
 ## Architecture
 
 ```
-LLM Endpoint ──▶ Open WebUI ──MCP Streamable HTTP──▶ ghidra-mcp-bridge (MCP→REST gateway)
-                                                     ──▶ ghidra-mcp-headless (Ghidra 12.1 REST API)
+LLM Endpoint ──▶ Open WebUI ──MCP Streamable HTTP──▶ ghidra-mcp-headless (combined container)
+                                                      ├─ Python MCP bridge (MCP→REST gateway, port 8090)
+                                                      └─ Ghidra 12.1 headless REST API (port 8089)
 ```
 
-MCPJungle is currently disabled (commented out in docker-compose.yml). Open WebUI connects directly to the ghidra-mcp bridge. Add MCPJungle back when you need to aggregate multiple MCP servers.
+The Ghidra headless server and its MCP bridge run in a **single container** (`ghidra-mcp-headless`).
+The container starts the Java REST API in the background, then the Python bridge in the
+foreground — both run as separate processes inside the same container. Open WebUI connects
+to the MCP bridge at port 8090, which translates MCP tool calls to Ghidra's REST API on
+port 8089.
+
+MCPJungle is currently disabled (commented out in docker-compose.yml). Open WebUI connects
+directly to the MCP bridge. Add MCPJungle back when you need to aggregate multiple MCP servers.
 
 ## Prerequisites
 

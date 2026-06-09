@@ -24,8 +24,3 @@ mcpjungle.db
 volumes/
 data/
 
-# logs
-*.log
-
-# os
-.DS_Store
