@@ -199,8 +199,8 @@ services:
       - "${GHIDRA_MCP_HEADLESS_PORT:-3334}:8089"   # REST API (direct access for debugging)
       - "${GHIDRA_MCP_BRIDGE_PORT:-3335}:8090"      # MCP Streamable HTTP endpoint
     volumes:
-      - ./binaries:/binaries:ro
       - ghidra-projects:/projects
+      - ${SHARED_FOLDER:-./shared}:/shared
     environment:
       - GHIDRA_MCP_PORT=8089
       - GHIDRA_MCP_AUTH_TOKEN=${GHIDRA_MCP_AUTH_TOKEN:-changeme}

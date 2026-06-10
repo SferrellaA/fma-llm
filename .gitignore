@@ -8,19 +8,17 @@ pyproject.toml
 uv.lock
 **/__pycache__/
 
-# ghidra legacy
+# ghidra
 ghidra
 bridge_mcp_ghidra.py
 GhidraMCP*.zip
 ghidramcp.requirements.txt
-
-# ghidra-docker-mcp runtime
 ghidra-projects/
-
-# mcpjungle runtime
-mcpjungle.db
 
 # docker
 volumes/
 data/
+
+# shared folder (user binaries and ghidra projects)
+shared/
 

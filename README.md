@@ -34,7 +34,8 @@ port 8089.
 4. Open http://localhost in your browser.
 5. Pick the default model (`grok-4.3`) or a tool-capable model of your choice. All MCP tools are
    **auto-bound to the model** at startup — no manual configuration needed.
-6. Place a binary file in `./binaries/` and use the `import_file` MCP tool with path `/binaries/your-binary` to load it into Ghidra for analysis.
+6. Set `SHARED_FOLDER` in `.env` (defaults to `./shared`) — see [Shared Folder](#shared-folder) below.
+7. Drop a binary into the shared folder, then in Open WebUI ask the model: *"Import `/shared/your-binary` and decompile main"*.
 
 ## Usage Examples
 
@@ -136,9 +137,38 @@ flags from the bridge command to load all tools on startup.
 | DEFAULT_MODEL_PARAMS      | Default model params (native tool)   | {"function_calling":"native"}            |
 | WEBUI_SECRET_KEY          | Stable secret for Open WebUI sessions| (generate with openssl)                  |
 | GHIDRA_MCP_AUTH_TOKEN     | Auth token for headless Ghidra MCP   | changeme                                 |
+| SHARED_FOLDER             | Host path mounted at /shared (rw) in the Ghidra container — drop binaries here for the model to analyze, or host existing Ghidra projects | ./shared                                 |
 | OWUI_PORT                 | Open WebUI host port                 | 80                                       |
 | GHIDRA_MCP_HEADLESS_PORT  | Ghidra headless REST API host port   | 3334                                     |
 | GHIDRA_MCP_BRIDGE_PORT    | Ghidra MCP bridge (Streamable HTTP)  | 3335                                     |
+
+## Shared Folder
+
+The optional `SHARED_FOLDER` environment variable mounts a host directory into the Ghidra
+container at `/shared` (read-write). This gives the model a workspace to:
+
+1. **Analyze new binaries** — Drop a binary into the shared folder on your host, then tell the model:
+   > "Import the binary at `/shared/my-binary.exe` and decompile its main function"
+   The model calls `import_file` pointing into `/shared`.
+
+2. **Create Ghidra projects** — Tell the model to create a new project inside the shared folder:
+   > "Create a new Ghidra project at `/shared/my-analysis` and import `/shared/my-binary.exe`"
+
+3. **Work with existing Ghidra projects** — Point the model at an existing `.gpr` project:
+   > "Open the project at `/shared/existing-project/existing-project.gpr` and list all functions"
+
+**Example workflow:**
+
+```bash
+# 1. Set SHARED_FOLDER=./shared in your .env
+# 2. Drop a binary into ./shared/
+# 3. Restart: docker compose up -d
+# 4. In Open WebUI, ask the model:
+#    "Import /shared/my-binary.exe, create a project at /shared/analysis-project, decompile main"
+```
+
+> **Note:** The shared folder is mounted read-write (`:rw`) — Ghidra can write project files
+> there and the model can reference files at `/shared/...`.
 
 ## Troubleshooting
 
