@@ -64,8 +64,8 @@ picked up on the next restart. No script changes needed.
 |---------------------------|--------------------------------------|------------------------------------------|
 | BASE_URL                  | OpenAI-compatible LLM endpoint       | https://api.openai.com/v1                |
 | API_KEY                   | Your LLM provider key                | sk-...                                   |
-| WEBUI_ADMIN_EMAIL         | Admin email for bootstrap auth       | admin@fma-llm.local                      |
-| WEBUI_ADMIN_PASSWORD      | Admin password for bootstrap auth    | changeme-admin-pw                        |
+| WEBUI_ADMIN_EMAIL         | Admin email for bootstrap auth       | demo@demo.demo                           |
+| WEBUI_ADMIN_PASSWORD      | Admin password for bootstrap auth    | demo                                    |
 | DEFAULT_MODEL_PARAMS      | Default model params (native tool)   | {"function_calling":"native"}            |
 | WEBUI_SECRET_KEY          | Stable secret for Open WebUI sessions| (generate with openssl)                  |
 | GHIDRA_MCP_AUTH_TOKEN     | Auth token for headless Ghidra MCP   | changeme                                 |

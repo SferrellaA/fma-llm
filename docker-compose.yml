@@ -3,6 +3,7 @@ services:
   # On first start, auto-creates an admin user (WEBUI_ADMIN_EMAIL/PASSWORD),
   # then auto-discovers all MCP tool servers and binds them to the default model
   # so every new chat has tools available without manual setup.
+  # OFFLINE_MODE suppresses the "What's New" modal on login; inference & MCP still work.
   open-webui:
     image: ghcr.io/open-webui/open-webui:0.9.6
     ports:
@@ -10,17 +11,17 @@ services:
     environment:
       - OPENAI_API_BASE_URL=${BASE_URL}
       - OPENAI_API_KEY=${API_KEY}
-      - WEBUI_AUTH=False
       - ENABLE_OLLAMA_API=False
       - ENABLE_OPENAI_API=True
       - BYPASS_MODEL_ACCESS_CONTROL=True
       - ENABLE_DIRECT_CONNECTIONS=True
+      - OFFLINE_MODE=True
       - ENABLE_VERSION_UPDATE_CHECK=False
       - ENABLE_PERSISTENT_CONFIG=False
       - DEFAULT_MODELS=${DEFAULT_MODEL}
       - DEFAULT_MODEL_PARAMS={"function_calling":"native"}
-      - WEBUI_ADMIN_EMAIL=${WEBUI_ADMIN_EMAIL:-admin@fma-llm.local}
-      - WEBUI_ADMIN_PASSWORD=${WEBUI_ADMIN_PASSWORD:-changeme-admin-pw}
+      - WEBUI_ADMIN_EMAIL=${WEBUI_ADMIN_EMAIL:-demo@demo.demo}
+      - WEBUI_ADMIN_PASSWORD=${WEBUI_ADMIN_PASSWORD:-demo}
       - TOOL_SERVER_CONNECTIONS=[{"type":"mcp","url":"http://ghidra-mcp-headless:8090/mcp","spec_type":"url","spec":"","path":"openapi.json","auth_type":"none","key":"","config":{"enable":true},"info":{"id":"ghidra","name":"ghidra-mcp","description":"Ghidra binary analysis MCP server (249 tools)"}}]
     depends_on:
       ghidra-mcp-headless:
