@@ -154,7 +154,7 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}Starting MCP bridge (foreground, lazy mode)...${NC}"
 # Running in foreground — if the bridge exits, the container exits.
 # This ensures Docker catches bridge crashes and restarts the container.
-# Lazy mode loads only the default tool groups (listing, function, program = ~81 tools)
+# Lazy mode loads only the default tool groups (listing, function, program, headless = ~84 tools)
 # on connect, keeping the initial tool list small. Use load_tool_group() at runtime
 # to load additional groups as needed. This reduces tool count for clients with
 # a 200-tool limit while retaining access to all ~233 tools on demand.
@@ -181,7 +181,7 @@ bridge_mcp_ghidra.main()
     --mcp-host 0.0.0.0 \
     --mcp-port 8090 \
     --lazy \
-    --default-groups listing,function,program &
+    --default-groups listing,function,program,headless &
 BRIDGE_PID=$!
 echo "MCP bridge PID: $BRIDGE_PID"
 
