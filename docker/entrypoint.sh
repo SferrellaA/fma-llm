@@ -151,14 +151,37 @@ echo -e "${GREEN}    REST API: http://0.0.0.0:${PORT}${NC}"
 echo -e "${GREEN}    MCP endpoint: http://0.0.0.0:8090/mcp${NC}"
 echo -e "${GREEN}========================================${NC}"
 
-echo -e "${GREEN}Starting MCP bridge (foreground)...${NC}"
+echo -e "${GREEN}Starting MCP bridge (foreground, lazy mode)...${NC}"
 # Running in foreground — if the bridge exits, the container exits.
 # This ensures Docker catches bridge crashes and restarts the container.
-BRIDGE_PID=""
-/app/venv/bin/python /app/bridge_mcp_ghidra.py \
+# Lazy mode loads only the default tool groups (listing, function, program = ~81 tools)
+# on connect, keeping the initial tool list small. Use load_tool_group() at runtime
+# to load additional groups as needed. This reduces tool count for clients with
+# a 200-tool limit while retaining access to all ~233 tools on demand.
+# Start bridge via a Python wrapper that patches MCP library before loading the bridge.
+# The patch makes the Streamable HTTP transport accept Accept: */* which is what
+# Open WebUI's httpx client sends by default (MCP spec requires application/json,text/event-stream).
+# Both the patch and the bridge must run in the same Python process.
+/app/venv/bin/python -c "
+import mcp.server.streamable_http
+orig = mcp.server.streamable_http.StreamableHTTPServerTransport._check_accept_headers
+
+def _patched_check_accept(self, request):
+    accept = request.headers.get('accept', '').strip()
+    if accept in ('*/*', ''):
+        return (True, True)
+    return orig(self, request)
+
+mcp.server.streamable_http.StreamableHTTPServerTransport._check_accept_headers = _patched_check_accept
+
+import bridge_mcp_ghidra
+bridge_mcp_ghidra.main()
+" \
     --transport streamable-http \
     --mcp-host 0.0.0.0 \
-    --mcp-port 8090 &
+    --mcp-port 8090 \
+    --lazy \
+    --default-groups listing,function,program &
 BRIDGE_PID=$!
 echo "MCP bridge PID: $BRIDGE_PID"
 

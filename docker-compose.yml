@@ -66,8 +66,12 @@ services:
         MCP_URL=http://ghidra-mcp-headless:8090/mcp
         echo "Waiting for MCP bridge at $${MCP_URL}..."
         for i in $$(seq 1 60); do
-          if curl -sf "$${MCP_URL}" -X POST -H "Content-Type: application/json" \
-            -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' > /dev/null 2>&1; then
+          # Use "initialize" (not tools/list) — MCP Streamable HTTP requires
+          # a session to be established before tool methods can be called.
+          if curl -sf "$${MCP_URL}" -X POST \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json, text/event-stream" \
+            -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"healthcheck","version":"1.0"}}}' > /dev/null 2>&1; then
             echo "MCP bridge ready after $${i}s"
             break
           fi
@@ -146,7 +150,21 @@ services:
             'is_active': True,
         })
 
-        # Try create first (first run: model doesn't exist in workspace yet)
+        try:
+            req = urllib.request.Request(
+                BASE + '/api/v1/models/model/delete',
+                data=json.dumps({'id': DEFAULT_MODEL}).encode(),
+                headers=auth_hdr,
+            )
+            urllib.request.urlopen(req)
+            print('Deleted existing model')
+        except urllib.error.HTTPError as e:
+            if b'NOT_FOUND' not in e.read():
+                print(f'WARN: Model delete gave HTTP {e.code} (ignoring)')
+        except Exception:
+            pass  # First run — model doesn't exist yet
+
+        # Then create fresh (works on first run and after delete)
         try:
             req = urllib.request.Request(
                 BASE + '/api/v1/models/create',
@@ -157,21 +175,7 @@ services:
                 resp.get('id'), resp.get('meta', {}).get('toolIds', [])))
         except urllib.error.HTTPError as e:
             err = e.read().decode()
-            print(f'Create failed (HTTP {e.code}): {err[:200]}')
-            if e.code == 401:
-                # Model ID already taken -> update instead
-                try:
-                    req = urllib.request.Request(
-                        BASE + '/api/v1/models/model/update',
-                        data=payload.encode(), headers=auth_hdr,
-                    )
-                    resp = json.loads(urllib.request.urlopen(req).read())
-                    print('Model updated: {} — tools: {}'.format(
-                        resp.get('id'), resp.get('meta', {}).get('toolIds', [])))
-                except Exception as e2:
-                    print(f'WARN: Model update failed: {e2}')
-            else:
-                print(f'WARN: Model create failed (HTTP {e.code}), tools will need manual setup')
+            print(f'WARN: Model create failed (HTTP {e.code}): {err[:200]}')
         except Exception as e:
             print(f'WARN: Model create failed: {e}')
 

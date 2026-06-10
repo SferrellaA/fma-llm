@@ -58,6 +58,73 @@ start. Here's how it works:
 **Future-proof**: Adding a new MCP server to `TOOL_SERVER_CONNECTIONS` is automatically
 picked up on the next restart. No script changes needed.
 
+## Tool Lazy Loading (200-Tool Limit)
+
+The Ghidra MCP bridge exposes ~233 tools across 12+ categories, but some LLM
+providers limit how many tools a model can receive. The bridge is configured in
+**lazy mode** by default to stay within a 200-tool limit:
+
+### How Lazy Mode Works
+
+Lazy mode loads only the **3 default tool groups** on initial connection, giving
+you ~81 immediately callable tools. The remaining tools stay dormant until
+explicitly requested at runtime via MCP tool calls.
+
+**Default groups always loaded:**
+
+| Group | Tools | What You Get |
+|---|---|---|
+| **listing** | ~21 | List functions, strings, segments, imports, exports, classes |
+| **function** | ~35 | Decompile, rename, prototype, variables, create/delete functions |
+| **program** | ~25 | Metadata, save, scripts, memory read, bookmarks |
+
+**Groups you can load on demand** (via `load_tool_group()`):
+
+| Group | Tools | Runtime Command | Description |
+|---|---|---|---|
+| datatype | ~38 | `load_tool_group("datatype")` | Struct/enum/union CRUD, data types |
+| analysis | ~23 | `load_tool_group("analysis")` | Completeness scoring, similarity, crypto, CFG |
+| xref | ~12 | `load_tool_group("xref")` | Cross-references, call graphs |
+| symbol | ~12 | `load_tool_group("symbol")` | Labels, globals, external locations |
+| documentation | ~15 | `load_tool_group("documentation")` | Function hashing, cross-binary doc transfer |
+| comment | ~7 | `load_tool_group("comment")` | Plate/decompiler/disassembly comments |
+| malware | ~5 | `load_tool_group("malware")` | Anti-analysis detection, IOC extraction |
+| emulation | ~3 | `load_tool_group("emulation")` | Function emulation |
+
+### Runtime Usage
+
+```python
+# At any point during analysis, load additional tools:
+load_tool_group("xref")       # Add cross-reference tools (+12)
+load_tool_group("datatype")   # Add data type tools (+38)
+load_tool_group("malware")    # Add malware analysis tools (+5)
+
+# Check which tools are loaded:
+list_tool_groups()
+
+# Verify a specific tool is callable:
+check_tools(tools="get_xrefs_to,decompile_function,list_functions")
+
+# Unload a non-default group if you need to free up room:
+unload_tool_group("datatype")
+
+# Load everything at once (bypass the limit):
+load_tool_group("all")
+```
+
+### Managing the Tool Count
+
+- **~81 tools**: Default lazy mode (listing + function + program)
+- **~140 tools**: Defaults + xref + symbol + comment + malware + emulation + documentation
+- **~200 tools**: Defaults + xref + symbol + comment + malware + emulation + documentation + analysis + datatype
+- **~233 tools**: `load_tool_group("all")` — everything
+
+### Disabling Lazy Mode
+
+If your LLM provider supports 200+ tools or you're running a local model with no
+limit, edit `docker/entrypoint.sh` and remove the `--lazy` and `--default-groups`
+flags from the bridge command to load all tools on startup.
+
 ## Configuration Reference
 
 | Variable                  | Purpose                              | Default / Example                        |
