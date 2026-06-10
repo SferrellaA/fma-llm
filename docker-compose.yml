@@ -30,7 +30,7 @@ services:
       - OFFLINE_MODE=True
       - WEBUI_ADMIN_EMAIL=${WEBUI_ADMIN_EMAIL:-demo@demo.demo}
       - WEBUI_ADMIN_PASSWORD=${WEBUI_ADMIN_PASSWORD:-demo}
-      - TOOL_SERVER_CONNECTIONS=[{"type":"mcp","url":"http://ghidra-mcp-headless:8090/mcp","spec_type":"url","spec":"","path":"openapi.json","auth_type":"none","key":"","config":{"enable":true},"info":{"id":"ghidra","name":"ghidra-mcp","description":"Ghidra binary analysis MCP server (249 tools)"}}]
+      - TOOL_SERVER_CONNECTIONS=[{"type":"mcp","url":"http://ghidra-mcp-headless:8090/mcp","spec_type":"url","spec":"","path":"openapi.json","auth_type":"none","key":"","config":{"enable":true},"info":{"id":"ghidra","name":"ghidra-mcp","description":"Ghidra binary analysis MCP server (249 tools)"}},{"type":"mcp","url":"http://open-terminal:9000/mcp","spec_type":"url","spec":"","path":"openapi.json","auth_type":"none","key":"","config":{"enable":true},"info":{"id":"terminal","name":"open-terminal","description":"Terminal MCP server for command execution and file management"}}]
     depends_on:
       ghidra-mcp-headless:
         condition: service_started
@@ -199,7 +199,7 @@ services:
       - "${GHIDRA_MCP_HEADLESS_PORT:-3334}:8089"   # REST API (direct access for debugging)
       - "${GHIDRA_MCP_BRIDGE_PORT:-3335}:8090"      # MCP Streamable HTTP endpoint
     volumes:
-      - ghidra-projects:/projects
+      - ${SHARED_FOLDER:-./shared}/projects:/projects
       - ${SHARED_FOLDER:-./shared}:/shared
     environment:
       - GHIDRA_MCP_PORT=8089
@@ -213,6 +213,22 @@ services:
       start_period: 120s
       retries: 5
 
+  # open-terminal - Lightweight terminal MCP server for command execution
+  # and file management alongside Ghidra analysis. Shares the same
+  # SHARED_FOLDER so files imported in Ghidra are accessible here at /shared.
+  # API key is static ("demo") since this is for demo/presentation use only.
+  open-terminal:
+    image: ghcr.io/open-webui/open-terminal:latest
+    ports:
+      - "${OPEN_TERMINAL_MCP_PORT:-9000}:9000"
+    volumes:
+      - ${SHARED_FOLDER:-./shared}:/shared
+    environment:
+      - OPEN_TERMINAL_API_KEY=demo
+      - OPEN_TERMINAL_PACKAGES=gdb
+      - OPEN_TERMINAL_PIP_PACKAGES=fastmcp
+    command: ["mcp", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "9000"]
+    restart: unless-stopped
+
 volumes:
   open-webui-data:
-  ghidra-projects:
