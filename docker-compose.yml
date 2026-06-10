@@ -173,24 +173,6 @@ services:
         echo "Entering server loop..."
         wait $$WEBUI_PID
 
-  # MCPJungle - MCP gateway that aggregates and exposes MCP servers via Streamable HTTP
-  # Temporarily disabled. Uncomment when ready to integrate.
-  # mcpjungle:
-  #   image: ghcr.io/mcpjungle/mcpjungle:latest-stdio
-  #   ports:
-  #     - "8080:8080"
-  #   volumes:
-  #     - mcpjungle-data:/data
-  #   environment:
-  #     - SQLITE_DB_PATH=/data/mcpjungle.db
-  #   healthcheck:
-  #     test: ["CMD", "/mcpjungle", "health"]
-  #     interval: 5s
-  #     timeout: 3s
-  #     retries: 10
-  #     start_period: 10s
-  #   restart: unless-stopped
-
   # ghidra-mcp-headless - Combined Ghidra 12.1 headless REST API + Python MCP bridge
   # Merges the upstream GhidraMCP headless server (bethington/ghidra-mcp v5.13.1)
   # and its bridge_mcp_ghidra.py into a single container. The Java process serves
@@ -217,35 +199,6 @@ services:
       timeout: 10s
       start_period: 120s
       retries: 5
-
-  # mcp-setup - One-shot initialization container that registers ghidra-mcp with MCPJungle
-  # Temporarily disabled with MCPJungle. Uncomment when ready to integrate.
-  # mcp-setup:
-  #   image: ghcr.io/mcpjungle/mcpjungle:latest-stdio
-  #   depends_on:
-  #     mcpjungle:
-  #       condition: service_healthy
-  #     ghidra-mcp-headless:
-  #       condition: service_started
-  #   entrypoint: ["/bin/sh", "-c"]
-  #   command:
-  #     - |
-  #       echo "Waiting for ghidra-mcp bridge endpoint..."
-  #       i=0
-  #       until curl -s http://ghidra-mcp-headless:8090/mcp > /dev/null 2>&1; do
-  #         i=$$((i+1))
-  #         if [ $$i -ge 120 ]; then
-  #           echo "Timeout waiting for ghidra-mcp bridge after 120 retries"
-  #           exit 1
-  #         fi
-  #         sleep 2
-  #       done
-  #       echo "Registering ghidra-mcp with MCPJungle..."
-  #       /mcpjungle register --name ghidra --description "Ghidra binary analysis MCP server (249 tools)" --url http://ghidra-mcp-headless:8090/mcp
-  #       echo "Creating Tool Group 're-tools'..."
-  #       /mcpjungle group create --name re-tools --description "Reverse engineering tools (curated subset)"
-  #       echo "Setup complete."
-  #   restart: "no"
 
 volumes:
   open-webui-data:

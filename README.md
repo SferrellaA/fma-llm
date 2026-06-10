@@ -3,7 +3,6 @@
 ## Origins
 - Original: https://github.com/wellingtonlee/ghidra-docker-mcp (32 tools, Ghidra 12.0.4)
 - Current: https://github.com/bethington/ghidra-mcp (249 tools, Ghidra 12.1)
-- MCP gateway: https://github.com/mcpjungle/MCPJungle
 
 fma-llm brings AI-assisted binary analysis to your desktop. Chat with an LLM that can decompile functions, search strings, find cross-references, and more by calling MCP tools that run inside a headless Ghidra container.
 
@@ -20,9 +19,6 @@ The container starts the Java REST API in the background, then the Python bridge
 foreground — both run as separate processes inside the same container. Open WebUI connects
 to the MCP bridge at port 8090, which translates MCP tool calls to Ghidra's REST API on
 port 8089.
-
-MCPJungle is currently disabled (commented out in docker-compose.yml). Open WebUI connects
-directly to the MCP bridge. Add MCPJungle back when you need to aggregate multiple MCP servers.
 
 ## Prerequisites
 
@@ -46,25 +42,6 @@ directly to the MCP bridge. Add MCPJungle back when you need to aggregate multip
 - "Decompile the main function"
 - "Search for strings containing 'password'"
 - "Show cross-references to this address"
-
-## Adding Future MCP Servers (with MCPJungle)
-
-MCPJungle is currently disabled. When you're ready to aggregate multiple MCP servers, uncomment the `mcpjungle` and `mcp-setup` services in docker-compose.yml, then:
-
-```bash
-./scripts/setup-mcpjungle.sh register --name <name> --url <internal-url>
-```
-
-## Tool Curation with MCPJungle Groups (with MCPJungle)
-
-When MCPJungle is enabled, it exposes every tool by default. Use Tool Groups to curate a focused set for your chats.
-
-```bash
-./scripts/setup-mcpjungle.sh group-add <tool-name>
-./scripts/setup-mcpjungle.sh group-remove <tool-name>
-```
-
-ghidra-mcp ships with 249 tools. See the full list in its [README](https://github.com/bethington/ghidra-mcp).
 
 ## Auto-Config: MCP Tools Bound at Startup
 
