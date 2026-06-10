@@ -30,6 +30,7 @@ echo -e "${YELLOW}Configuration:${NC}"
 echo "  Bind Address: ${BIND_ADDRESS}"
 echo "  REST API Port: ${PORT}"
 echo "  MCP Bridge Port: 8090"
+echo "  Meta Proxy Port: 8091"
 echo "  Java Options: ${JAVA_OPTS}"
 echo "  Ghidra Home: ${GHIDRA_HOME}"
 [ -n "${GHIDRA_USER}" ] && echo "  Ghidra User: ${GHIDRA_USER}"
@@ -68,12 +69,20 @@ fi
 # ---- Signal handling ----
 GHIDRA_PID=""
 BRIDGE_PID=""
+PROXY_PID=""
 
 cleanup() {
     echo ""
     echo -e "${YELLOW}Shutting down...${NC}"
 
-    # Stop bridge first (handles in-flight MCP requests)
+    # Stop proxy first (no new connections)
+    if [ -n "$PROXY_PID" ] && kill -0 "$PROXY_PID" 2>/dev/null; then
+        echo "Stopping meta-tool proxy (PID $PROXY_PID)..."
+        kill "$PROXY_PID" 2>/dev/null || true
+        wait "$PROXY_PID" 2>/dev/null || true
+    fi
+
+    # Stop bridge second (handles in-flight MCP requests)
     if [ -n "$BRIDGE_PID" ] && kill -0 "$BRIDGE_PID" 2>/dev/null; then
         echo "Stopping MCP bridge (PID $BRIDGE_PID)..."
         kill "$BRIDGE_PID" 2>/dev/null || true
@@ -147,14 +156,12 @@ done
 # ---- Start MCP bridge in foreground ----
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  Services running:${NC}"
-echo -e "${GREEN}    REST API: http://0.0.0.0:${PORT}${NC}"
-echo -e "${GREEN}    MCP endpoint: http://0.0.0.0:8090/mcp${NC}"
+echo -e "${GREEN}    REST API:     http://0.0.0.0:${PORT}${NC}"
+echo -e "${GREEN}    MCP bridge:   http://0.0.0.0:8090/mcp (internal)${NC}"
+echo -e "${GREEN}    MCP proxy:    http://0.0.0.0:8091/mcp (get_tool/invoke_tool)${NC}"
 echo -e "${GREEN}========================================${NC}"
 
-echo -e "${GREEN}Starting MCP bridge (foreground)...${NC}"
-# Running in foreground — if the bridge exits, the container exits.
-# This ensures Docker catches bridge crashes and restarts the container.
-BRIDGE_PID=""
+echo -e "${GREEN}Starting MCP bridge...${NC}"
 /app/venv/bin/python /app/bridge_mcp_ghidra.py \
     --transport streamable-http \
     --mcp-host 0.0.0.0 \
@@ -162,9 +169,45 @@ BRIDGE_PID=""
 BRIDGE_PID=$!
 echo "MCP bridge PID: $BRIDGE_PID"
 
-# Wait for the bridge to exit (blocks until bridge or Ghidra dies)
+# Wait for bridge to be ready
+echo -e "${YELLOW}Waiting for MCP bridge to be ready...${NC}"
+for i in $(seq 1 30); do
+    if curl -sf http://localhost:8090/mcp -X POST \
+        -H "Content-Type: application/json" \
+        -H "Accept: application/json, text/event-stream" \
+        -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"healthcheck","version":"1.0"}}}' > /dev/null 2>&1; then
+        echo -e "${GREEN}MCP bridge ready after ${i}s${NC}"
+        break
+    fi
+    sleep 2
+done
+
+# Start meta-tool proxy (get_tool / invoke_tool) — connects to the MCP bridge
+echo -e "${GREEN}Starting meta-tool proxy...${NC}"
+UPSTREAM_URL=http://localhost:8090/mcp \
+    /app/venv/bin/python /app/proxy.py &
+PROXY_PID=$!
+echo "Meta-tool proxy PID: $PROXY_PID"
+
+# Wait for proxy to be ready
+echo -e "${YELLOW}Waiting for meta-tool proxy to be ready...${NC}"
+for i in $(seq 1 30); do
+    if curl -sf http://localhost:8091/health > /dev/null 2>&1; then
+        echo -e "${GREEN}Meta-tool proxy ready after ${i}s${NC}"
+        break
+    fi
+    sleep 2
+done
+
+# Wait for the bridge to exit (blocks until bridge dies)
 wait $BRIDGE_PID
 BRIDGE_EXIT=$?
+
+# Kill proxy when bridge exits
+if [ -n "$PROXY_PID" ] && kill -0 "$PROXY_PID" 2>/dev/null; then
+    kill "$PROXY_PID" 2>/dev/null || true
+    wait "$PROXY_PID" 2>/dev/null || true
+fi
 
 # Bridge exited. Clean up Ghidra server before exiting.
 echo -e "${YELLOW}MCP bridge exited (code $BRIDGE_EXIT). Cleaning up...${NC}"

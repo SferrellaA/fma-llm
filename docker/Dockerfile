@@ -113,9 +113,15 @@ RUN mkdir -p /app /data /projects
 # Copy the built headless JAR
 COPY --from=builder /build/target/GhidraMCP-*.jar /app/GhidraMCP.jar
 
-# Set up Python virtualenv and install bridge dependencies
+# Set up Python virtualenv and install bridge + proxy dependencies
 RUN python3 -m venv /app/venv && \
-    /app/venv/bin/pip install -q --no-cache-dir 'mcp>=1.2.0,<2'
+    /app/venv/bin/pip install -q --no-cache-dir \
+        'mcp>=1.2.0,<2' \
+        'aiohttp>=3.9,<4' \
+        'httpx>=0.27,<1'
+
+# Copy the meta-tool proxy (get_tool / invoke_tool wrapper around the MCP bridge)
+COPY docker/proxy.py /app/proxy.py
 
 # Download the MCP bridge script and patch it to forward GHIDRA_MCP_AUTH_TOKEN
 RUN curl -sL -o /app/bridge_mcp_ghidra.py \
@@ -136,10 +142,11 @@ PYEOF
 COPY docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-# Expose both the REST API and the MCP Streamable HTTP port
+# Expose the REST API, MCP Streamable HTTP, and meta-tool proxy ports
 #   8089 — Ghidra headless REST API (direct access for debugging)
-#   8090 — MCP Streamable HTTP endpoint (what Open WebUI / clients connect to)
-EXPOSE 8089 8090
+#   8090 — MCP Streamable HTTP endpoint (internal: bridge_mcp_ghidra)
+#   8091 — Meta-tool proxy: get_tool/invoke_tool (what clients connect to)
+EXPOSE 8089 8090 8091
 
 # Volume for persistent data and projects
 VOLUME ["/data", "/projects"]
