@@ -133,7 +133,7 @@ with open('/app/bridge_mcp_ghidra.py', 'w') as f:
 PYEOF
 
 # Copy entrypoint script
-COPY docker/entrypoint.sh /app/entrypoint.sh
+COPY docker/ghidra-entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 # Expose both the REST API and the MCP Streamable HTTP port

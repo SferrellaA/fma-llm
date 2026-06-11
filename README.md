@@ -102,7 +102,7 @@ load_tool_group("all")
 
 ### Disabling Lazy Mode
 
-If your LLM provider supports 200+ tools or you're running a local model with no limit, edit `docker/entrypoint.sh` and remove the `--lazy` and `--default-groups` flags from the bridge command to load all tools on startup.
+If your LLM provider supports 200+ tools or you're running a local model with no limit, edit `docker/ghidra-entrypoint.sh` and remove the `--lazy` and `--default-groups` flags from the bridge command to load all tools on startup.
 
 ## open-terminal Sidecar
 

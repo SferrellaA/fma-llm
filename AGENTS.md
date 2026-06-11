@@ -58,12 +58,12 @@ The Ghidra headless server and its MCP bridge run in a **single container**. The
 
 ### `ghidra-mcp-headless`
 
-- **Build**: `docker/Dockerfile` (multi-stage: builder → runtime)
+- **Build**: `docker/ghidra.Dockerfile` (multi-stage: builder → runtime)
 - **Ports**: 8089 (REST API), 8090 (MCP bridge)
 - **Upstream**: `bethington/ghidra-mcp` v5.13.1 — 249 tools upstream, ~233 reachable in this setup
 - **Files**:
-  - `docker/Dockerfile` — Combined Ghidra + MCP bridge image
-  - `docker/entrypoint.sh` — Container startup script
+  - `docker/ghidra.Dockerfile` — Combined Ghidra + MCP bridge image
+  - `docker/ghidra-entrypoint.sh` — Container startup script
 - **Startup flow**:
   1. Build classpath from Ghidra JARs
   2. Start Java Ghidra headless server in background (PID tracked)
@@ -116,7 +116,7 @@ The LLM's upstream API enforces a 200-tool limit. Several approaches were tried:
 
 ### Why MCP Accept header patch is needed
 
-Open WebUI's HTTP client (`httpx`) sends `Accept: */*` by default. The MCP Python library's Streamable HTTP transport strictly requires `application/json, text/event-stream` and returns 406 for anything else. The fix is a monkey-patch in `entrypoint.sh` that wraps bridge startup:
+Open WebUI's HTTP client (`httpx`) sends `Accept: */*` by default. The MCP Python library's Streamable HTTP transport strictly requires `application/json, text/event-stream` and returns 406 for anything else. The fix is a monkey-patch in `ghidra-entrypoint.sh` that wraps bridge startup:
 
 ```python
 import mcp.server.streamable_http
@@ -187,7 +187,7 @@ Open WebUI's access control system silently skips tools the user doesn't have ex
 
 **Cause**: Client sent `Accept: */*` or `Accept: application/json` without `text/event-stream`.
 
-**Fix**: The monkey-patch in `entrypoint.sh` should handle this. If it persists, check that the patch is running (it's applied in the Python wrapper, not as a separate script).
+**Fix**: The monkey-patch in `ghidra-entrypoint.sh` should handle this. If it persists, check that the patch is running (it's applied in the Python wrapper, not as a separate script).
 
 ### "Maximum tools limit reached" (200-tool limit)
 
@@ -323,8 +323,8 @@ curl -s http://localhost:3335/mcp -X POST \
 | File | Purpose |
 |---|---|
 | `docker-compose.yml` | Service definitions (open-webui, ghidra-mcp-headless, open-terminal) |
-| `docker/Dockerfile` | Multi-stage build: Ghidra 12.1 + MCP bridge |
-| `docker/entrypoint.sh` | Container startup: Java REST API → Python MCP bridge |
+| `docker/ghidra.Dockerfile` | Multi-stage build: Ghidra 12.1 + MCP bridge |
+| `docker/ghidra-entrypoint.sh` | Container startup: Java REST API → Python MCP bridge |
 | `README.md` | User-facing documentation |
 | `AGENTS.md` | This file — agent knowledge base |
 | `.opencode/agents/fma-llm-transition.md` | Legacy agent definition from the shell→Docker rewrite phase |
