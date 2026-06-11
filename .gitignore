@@ -1,2 +1,5 @@
 .env
 .opencode/
+shared/hsperfdata_root/
+shared/projects/
+shared/root-ghidramcp/
