@@ -1,24 +1,2 @@
-# secrets
 .env
-
-# python
-.python-version
-pyproject.toml
-.venv
-uv.lock
-**/__pycache__/
-
-# ghidra
-ghidra
-bridge_mcp_ghidra.py
-GhidraMCP*.zip
-ghidramcp.requirements.txt
-ghidra-projects/
-
-# docker
-volumes/
-data/
-
-# shared folder (user binaries and ghidra projects)
-shared/
-
+.opencode/
