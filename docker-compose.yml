@@ -199,8 +199,8 @@ services:
       - "${GHIDRA_MCP_HEADLESS_PORT:-3334}:8089"   # REST API (direct access for debugging)
       - "${GHIDRA_MCP_BRIDGE_PORT:-3335}:8090"      # MCP Streamable HTTP endpoint
     volumes:
-      - ${SHARED_FOLDER:-./shared}/projects:/projects
-      - ${SHARED_FOLDER:-./shared}:/shared
+      - ${GHIDRA_PROJECTS_FOLDER:-./shared/projects}:/projects
+      - ${SHARED_FOLDER:-./shared}:/tmp
     environment:
       - GHIDRA_MCP_PORT=8089
       - GHIDRA_MCP_AUTH_TOKEN=${GHIDRA_MCP_AUTH_TOKEN:-changeme}
@@ -222,7 +222,8 @@ services:
     ports:
       - "${OPEN_TERMINAL_MCP_PORT:-9000}:9000"
     volumes:
-      - ${SHARED_FOLDER:-./shared}:/shared
+      - ${SHARED_FOLDER:-./shared}:/home/user/shared
+      - ${SHARED_FOLDER:-./shared}/projects:/home/user/projects
     environment:
       - OPEN_TERMINAL_API_KEY=demo
       - OPEN_TERMINAL_PACKAGES=gdb
